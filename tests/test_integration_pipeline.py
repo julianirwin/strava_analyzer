@@ -2,7 +2,15 @@ from pathlib import Path
 
 from strava_analyzer.context_export import export_context
 from strava_analyzer.ingest import ingest_export
-from strava_analyzer.query import connect, filter_activities, group_activity_counts
+from strava_analyzer.query import (
+    commute_counts_by_year,
+    commute_route_selection,
+    commute_speed_by_period,
+    connect,
+    filter_activities,
+    filter_structured_commutes,
+    group_activity_counts,
+)
 
 
 def test_full_ingest_and_context_export(tmp_path: Path) -> None:
@@ -34,13 +42,28 @@ def test_full_ingest_and_context_export(tmp_path: Path) -> None:
     assert len(df) == 3
     assert parquet_file.exists()
     assert db_file.exists()
+    assert "is_structured_commute" in df.columns
+    assert "commute_label_key" in df.columns
 
     con = connect(db_file)
     try:
         rides = filter_activities(con, activity_types=["Ride"])
         assert len(rides) == 2
+
         grouped = group_activity_counts(con)
         assert "activity_count" in grouped.columns
+
+        commutes = filter_structured_commutes(con, year=2026)
+        assert len(commutes) == 2
+
+        by_year = commute_counts_by_year(con)
+        assert by_year.iloc[0]["commute_count"] == 2
+
+        by_period = commute_speed_by_period(con, year=2026)
+        assert set(by_period["commute_period"].tolist()) == {"am", "pm"}
+
+        route_mix = commute_route_selection(con, year=2026)
+        assert set(route_mix["route_label"].tolist()) == {"sw", "arb"}
     finally:
         con.close()
 

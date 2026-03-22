@@ -15,3 +15,7 @@ Recommended workflow:
 1. `strava-analyzer ingest`
 2. `strava-analyzer export-context`
 3. add journal entry in `llm_context/journals/`
+
+Commute analytics workflow:
+- Use query helpers to compute yearly commute counts, AM/PM speed comparisons, and route-label mixes.
+- Build notebook charts from grouped DataFrames (for example, route-label bar charts by year).

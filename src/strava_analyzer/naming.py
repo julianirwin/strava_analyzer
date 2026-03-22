@@ -2,47 +2,97 @@ from __future__ import annotations
 
 import re
 
-_TIME_PATTERNS = {
-    "morning": re.compile(r"\bmorning\b", re.IGNORECASE),
-    "afternoon": re.compile(r"\bafternoon\b", re.IGNORECASE),
-    "evening": re.compile(r"\bevening\b", re.IGNORECASE),
-    "lunch": re.compile(r"\blunch\b", re.IGNORECASE),
-}
-
-_REMOVE_TOKENS = re.compile(
-    r"\b(morning|afternoon|evening|lunch|ride|run|ski|nordic|activity|commute)\b",
+_COMMUTE_PATTERN = re.compile(
+    r"^\s*week\s+(?P<week>\d+(?:\.\d+)?)\s+commute\s+(?P<number>\d+)(?P<sep>\s*)(?P<period>am|pm)\b(?:\s+(?P<labels>.*?))?\s*$",
+    re.IGNORECASE,
+)
+_COMMUTE_PATTERN_2024 = re.compile(
+    r"^\s*commute\s+(?P<number>\d+)\s*\(\s*week\s+"
+    r"(?P<week>\d+(?:\.\d+)?)\s*(?:/\s*)?(?P<period>am|pm)"
+    r"(?:\s*(?:/\s*)?(?P<labels>[^)]*?))?\s*\)\s*$",
     re.IGNORECASE,
 )
 
+_LABEL_KEY_PATTERN = re.compile(r"[^a-z0-9]+")
 
-def parse_activity_name(name: str | None) -> dict[str, str | None]:
-    raw = (name or "").strip()
-    lowered = raw.lower()
 
-    time_of_day = None
-    for label, pattern in _TIME_PATTERNS.items():
-        if pattern.search(raw):
-            time_of_day = label
-            break
+def _is_bike_like(activity_type: str | None) -> bool:
+    lowered = (activity_type or "").strip().lower()
+    return any(token in lowered for token in ["ride", "bike", "cycling"])
 
-    if lowered.startswith("week"):
-        category = "week_plan"
-    elif lowered.startswith("commute") or "commute" in lowered:
-        category = "commute"
-    elif any(token in raw for token in ["Ride", "Run", "Ski"]):
-        category = "sport_labeled"
-    elif raw:
-        category = "general"
-    else:
-        category = "unknown"
 
-    tag = _REMOVE_TOKENS.sub("", raw)
-    tag = re.sub(r"\s+", " ", tag).strip(" -_,")
-    if not tag:
-        tag = raw
+def _normalize_label_key(label: str | None) -> str | None:
+    if not label:
+        return None
+    normalized = _LABEL_KEY_PATTERN.sub("_", label.lower()).strip("_")
+    return normalized or None
 
+
+def _empty_commute_fields() -> dict[str, object]:
     return {
-        "name_category": category,
-        "time_of_day_label": time_of_day,
-        "name_tag": tag or None,
+        "is_structured_commute": False,
+        "commute_week_label": None,
+        "commute_week_number": None,
+        "commute_number": None,
+        "commute_period": None,
+        "commute_direction": None,
+        "commute_label_raw": None,
+        "commute_label_key": None,
+        "commute_parse_notes": None,
     }
+
+
+def parse_activity_name(name: str | None, activity_type: str | None = None) -> dict[str, object]:
+    raw = (name or "").strip()
+    out: dict[str, object] = {
+        "name_category": "general" if raw else "unknown",
+        "time_of_day_label": None,
+        "name_tag": raw or None,
+    }
+    out.update(_empty_commute_fields())
+
+    if not raw or not _is_bike_like(activity_type):
+        return out
+
+    match = _COMMUTE_PATTERN.match(raw)
+    style = "week_prefix"
+    if not match:
+        match = _COMMUTE_PATTERN_2024.match(raw)
+        style = "legacy_parenthesized"
+    if not match:
+        return out
+
+    week_label = match.group("week")
+    commute_number = int(match.group("number"))
+    period = match.group("period").lower()
+    labels = (match.group("labels") or "").strip()
+
+    notes: list[str] = []
+    sep = match.groupdict().get("sep")
+    if sep == "":
+        notes.append("missing_space_before_period")
+    if "." in week_label:
+        notes.append("fractional_week")
+    if style == "legacy_parenthesized":
+        notes.append("legacy_parenthesized_format")
+
+    direction = "to_work" if period == "am" else "from_work"
+    time_of_day = "morning" if period == "am" else "evening"
+
+    out.update(
+        {
+            "name_category": "structured_commute",
+            "time_of_day_label": time_of_day,
+            "name_tag": labels or raw,
+            "is_structured_commute": True,
+            "commute_week_label": week_label,
+            "commute_week_number": float(week_label),
+            "commute_number": commute_number,
+            "commute_period": period,
+            "commute_direction": direction,
+            "commute_label_raw": labels or None,
+            "commute_label_key": _normalize_label_key(labels),
+            "commute_parse_notes": ";".join(notes) if notes else None,
+        }
+    )
+    return out

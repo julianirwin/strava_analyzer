@@ -111,6 +111,7 @@ def ingest_export(
     activities = _read_csv_with_normalized_header(export_dir / "activities.csv")
 
     activity_name = _col(activities, "activity_name")
+    activity_type = _col(activities, "activity_type")
     activity_gear = _col(activities, "activity_gear", "gear")
     route_file = _col(activities, "filename")
 
@@ -121,17 +122,21 @@ def ingest_export(
                 _col(activities, "activity_date"), errors="coerce", format="%b %d, %Y, %I:%M:%S %p"
             ),
             "activity_name": activity_name,
-            "activity_type": _col(activities, "activity_type"),
+            "activity_type": activity_type,
             "distance_m": _to_float(_col(activities, "distance")),
             "elapsed_time_s": _to_float(_col(activities, "elapsed_time")),
             "moving_time_s": _to_float(_col(activities, "moving_time")),
+            "average_speed_mps": _to_float(_col(activities, "average_speed", "average_speed_2")),
             "elevation_gain_m": _to_float(_col(activities, "elevation_gain")),
             "equipment_name": activity_gear,
             "route_file": route_file,
         }
     )
 
-    parsed = activity_name.apply(parse_activity_name).apply(pd.Series)
+    parsed = data.apply(
+        lambda row: parse_activity_name(row.get("activity_name"), row.get("activity_type")),
+        axis=1,
+    ).apply(pd.Series)
     data = pd.concat([data, parsed], axis=1)
 
     equipment_types = _load_equipment_types(export_dir)
