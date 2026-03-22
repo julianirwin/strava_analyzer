@@ -31,5 +31,10 @@ ENV/
 htmlcov/
 .ipynb_checkpoints/
 
+# Generated local data
+data/
+llm_context/artifacts/*.csv
+llm_context/artifacts/*.md
+
 # Local sensitive data
 account_export/
