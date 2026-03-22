@@ -114,11 +114,11 @@ def commute_speed_by_period(
       commute_period,
       AVG(
         COALESCE(
-          average_speed_mps,
           CASE
-            WHEN moving_time_s > 0 THEN distance_m / moving_time_s
+            WHEN moving_time_s > 0 AND distance_m IS NOT NULL THEN distance_m / moving_time_s
             ELSE NULL
-          END
+          END,
+          average_speed_mps
         )
       ) AS avg_speed_mps,
       COUNT(*)::INTEGER AS commute_count
@@ -152,6 +152,100 @@ def commute_route_selection(
     WHERE {' AND '.join(clauses)}
     GROUP BY 1
     ORDER BY commute_count DESC, route_label
+    """
+    return con.execute(sql, params).fetch_df()
+
+
+def _equipment_clauses(
+    equipment_terms: list[str] | None, match_mode: str = "contains"
+) -> tuple[list[str], list[object]]:
+    clauses = ["distance_m IS NOT NULL", "equipment_name IS NOT NULL", "TRIM(equipment_name) <> ''"]
+    params: list[object] = []
+    terms = [t.strip() for t in (equipment_terms or []) if t and t.strip()]
+    if not terms:
+        return clauses, params
+
+    if match_mode not in {"contains", "exact"}:
+        msg = "match_mode must be 'contains' or 'exact'"
+        raise ValueError(msg)
+
+    term_clauses: list[str] = []
+    for term in terms:
+        if match_mode == "contains":
+            term_clauses.append("LOWER(equipment_name) LIKE ?")
+            params.append(f"%{term.lower()}%")
+        else:
+            term_clauses.append("LOWER(equipment_name) = ?")
+            params.append(term.lower())
+
+    clauses.append(f"({' OR '.join(term_clauses)})")
+    return clauses, params
+
+
+def equipment_distance_totals(
+    con: duckdb.DuckDBPyConnection,
+    equipment_terms: list[str] | None = None,
+    match_mode: str = "contains",
+) -> pd.DataFrame:
+    clauses, params = _equipment_clauses(equipment_terms, match_mode)
+    sql = f"""
+    SELECT
+      equipment_name,
+      SUM(distance_m) AS total_distance_m,
+      SUM(distance_m) / 1000.0 AS total_distance_km,
+      COUNT(*)::INTEGER AS activity_count
+    FROM activities
+    WHERE {' AND '.join(clauses)}
+    GROUP BY equipment_name
+    ORDER BY total_distance_m DESC, equipment_name
+    """
+    return con.execute(sql, params).fetch_df()
+
+
+def equipment_distance_by_year(
+    con: duckdb.DuckDBPyConnection,
+    equipment_terms: list[str] | None = None,
+    match_mode: str = "contains",
+) -> pd.DataFrame:
+    clauses, params = _equipment_clauses(equipment_terms, match_mode)
+    sql = f"""
+    SELECT
+      EXTRACT(year FROM activity_datetime)::INTEGER AS year,
+      equipment_name,
+      SUM(distance_m) AS total_distance_m,
+      SUM(distance_m) / 1000.0 AS total_distance_km,
+      COUNT(*)::INTEGER AS activity_count
+    FROM activities
+    WHERE {' AND '.join(clauses)}
+    GROUP BY 1, 2
+    ORDER BY year, equipment_name
+    """
+    return con.execute(sql, params).fetch_df()
+
+
+def equipment_distance_by_month(
+    con: duckdb.DuckDBPyConnection,
+    equipment_terms: list[str] | None = None,
+    year: int | None = None,
+    match_mode: str = "contains",
+) -> pd.DataFrame:
+    clauses, params = _equipment_clauses(equipment_terms, match_mode)
+    if year is not None:
+        clauses.append("EXTRACT(year FROM activity_datetime) = ?")
+        params.append(year)
+
+    sql = f"""
+    SELECT
+      EXTRACT(year FROM activity_datetime)::INTEGER AS year,
+      EXTRACT(month FROM activity_datetime)::INTEGER AS month,
+      equipment_name,
+      SUM(distance_m) AS total_distance_m,
+      SUM(distance_m) / 1000.0 AS total_distance_km,
+      COUNT(*)::INTEGER AS activity_count
+    FROM activities
+    WHERE {' AND '.join(clauses)}
+    GROUP BY 1, 2, 3
+    ORDER BY year, month, equipment_name
     """
     return con.execute(sql, params).fetch_df()
 

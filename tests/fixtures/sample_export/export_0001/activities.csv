@@ -1,4 +1,4 @@
-Activity ID,Activity Date,Activity Name,Activity Type,Activity Gear,Filename,Elapsed Time,Elapsed Time,Moving Time,Distance,Average Speed,Elevation Gain
-1,"Jan 01, 2026, 6:00:00 AM","Week 1 Commute 1 am sw",Ride,Road Bike,activities/1.gpx,3600,3600,3500,20000,5.8,250
-2,"Jan 02, 2026, 5:00:00 PM","Week 1 Commute 2pm arb",Ride,Road Bike,activities/2.fit,1800,1800,1700,6000,,20
-3,"Jan 03, 2026, 12:00:00 PM",Morning Run,Run,, ,2700,2700,2500,10000,4.0,80
+Activity ID,Activity Date,Activity Name,Activity Type,Activity Gear,Filename,Elapsed Time,Elapsed Time,Moving Time,Distance,Distance,Average Speed,Elevation Gain
+1,"Jan 01, 2026, 6:00:00 AM","Week 1 Commute 1 am sw",Ride,Road Bike,activities/1.gpx,3600,3600,3500,20,20000,5.8,250
+2,"Jan 02, 2026, 5:00:00 PM","Week 1 Commute 2pm arb",Ride,Road Bike,activities/2.fit,1800,1800,1700,6,6000,,20
+3,"Jan 03, 2026, 12:00:00 PM",Morning Run,Run,, ,2700,2700,2500,10,10000,4.0,80

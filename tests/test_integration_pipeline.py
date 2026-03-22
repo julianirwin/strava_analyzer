@@ -7,6 +7,9 @@ from strava_analyzer.query import (
     commute_route_selection,
     commute_speed_by_period,
     connect,
+    equipment_distance_by_month,
+    equipment_distance_by_year,
+    equipment_distance_totals,
     filter_activities,
     filter_structured_commutes,
     group_activity_counts,
@@ -61,9 +64,25 @@ def test_full_ingest_and_context_export(tmp_path: Path) -> None:
 
         by_period = commute_speed_by_period(con, year=2026)
         assert set(by_period["commute_period"].tolist()) == {"am", "pm"}
+        by_period_map = {
+            row["commute_period"]: row["avg_speed_mps"] for _, row in by_period.iterrows()
+        }
+        assert abs(by_period_map["am"] - (20000 / 3500)) < 1e-9
+        assert abs(by_period_map["pm"] - (6000 / 1700)) < 1e-9
 
         route_mix = commute_route_selection(con, year=2026)
         assert set(route_mix["route_label"].tolist()) == {"sw", "arb"}
+
+        totals = equipment_distance_totals(con, equipment_terms=["Road"], match_mode="contains")
+        assert totals.iloc[0]["equipment_name"] == "Road Bike"
+        assert totals.iloc[0]["total_distance_m"] == 26000
+
+        by_year_equipment = equipment_distance_by_year(con, equipment_terms=["Road"])
+        assert by_year_equipment.iloc[0]["year"] == 2026
+        assert by_year_equipment.iloc[0]["activity_count"] == 2
+
+        by_month_equipment = equipment_distance_by_month(con, equipment_terms=["Road"], year=2026)
+        assert set(by_month_equipment["month"].tolist()) == {1}
     finally:
         con.close()
 

@@ -69,6 +69,17 @@ def _to_float(series: pd.Series) -> pd.Series:
     return pd.to_numeric(series, errors="coerce")
 
 
+def _distance_meters(df: pd.DataFrame) -> pd.Series:
+    metric_distance = _to_float(_col(df, "distance_2"))
+    if metric_distance.notna().any():
+        return metric_distance
+
+    # The first Strava `Distance` column is in kilometers.
+    # Convert to meters when the metric-distance column is unavailable.
+    distance_km = _to_float(_col(df, "distance"))
+    return distance_km * 1000.0
+
+
 def _load_equipment_types(export_dir: Path) -> dict[str, str]:
     mapping: dict[str, str] = {}
     bikes_file = export_dir / "bikes.csv"
@@ -123,7 +134,7 @@ def ingest_export(
             ),
             "activity_name": activity_name,
             "activity_type": activity_type,
-            "distance_m": _to_float(_col(activities, "distance")),
+            "distance_m": _distance_meters(activities),
             "elapsed_time_s": _to_float(_col(activities, "elapsed_time")),
             "moving_time_s": _to_float(_col(activities, "moving_time")),
             "average_speed_mps": _to_float(_col(activities, "average_speed", "average_speed_2")),
